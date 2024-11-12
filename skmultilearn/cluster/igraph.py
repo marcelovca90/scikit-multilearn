@@ -187,6 +187,6 @@ class IGraphLabelGraphClusterer(LabelGraphClustererBase):
             edge_attrs=self.weights_
         )
 
-        return np.array(
-            IGraphLabelGraphClusterer._METHODS[self.method](self.graph_, self.weights_['weight'])
-        )
+        communities = IGraphLabelGraphClusterer._METHODS[self.method](self.graph_, self.weights_['weight'])
+        result = np.array([np.array(community) for community in communities], dtype=object)
+        return result
