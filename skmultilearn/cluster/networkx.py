@@ -160,11 +160,9 @@ class NetworkXLabelGraphClusterer(LabelGraphClustererBase):
             partition_dict = community.best_partition(self.graph_)
             memberships = [partition_dict[i] for i in range(y.shape[1])]
 
-            return np.array(
-                _membership_to_list_of_communities(
-                    memberships,
-                    1 + max(memberships)
-                )
-            )
+            communities = _membership_to_list_of_communities(memberships, 1 + max(memberships))
+            result = np.array([np.array(community) for community in communities], dtype=object)
+            return result
         else:
-            return np.array([list(i) for i in asyn_lpa_communities(self.graph_, 'weight')])
+            result = np.array([np.array(list(community)) for community in asyn_lpa_communities(self.graph_, 'weight')], dtype=object)
+            return result
