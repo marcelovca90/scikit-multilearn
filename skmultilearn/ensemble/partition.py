@@ -112,7 +112,8 @@ class LabelSpacePartitioningClassifier(BinaryRelevance):
             predictions = self._ensure_output_format(self.classifiers_[model].predict(
                 X), sparse_format=None, enforce_sparse=True).nonzero()
             for row, column in zip(predictions[0], predictions[1]):
-                result[row, self.partition_[model][column]] = 1
+                if column < len(self.partition_[model]):
+                    result[row, self.partition_[model][column]] = 1
 
         return result
 

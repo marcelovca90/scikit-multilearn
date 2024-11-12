@@ -91,10 +91,10 @@ class MajorityVotingClassifier(LabelSpacePartitioningClassifier):
         votes = sparse.lil_matrix(
             (predictions[0].shape[0], self._label_count), dtype='int')
         for model in range(self.model_count_):
-            for label in range(len(self.partition_[model])):
-                votes[:, self.partition_[model][label]] = votes[
-                                                         :, self.partition_[model][label]] + predictions[model][:, label]
-                voters[self.partition_[model][label]] += 1
+            prediction = predictions[model].toarray()
+            for label_idx, partition_label in enumerate(self.partition_[model]):
+                votes[:, partition_label] = votes[:, partition_label].toarray().ravel() + prediction[:, label_idx]
+                voters[partition_label] += 1
 
         nonzeros = votes.nonzero()
         for row, column in zip(nonzeros[0], nonzeros[1]):

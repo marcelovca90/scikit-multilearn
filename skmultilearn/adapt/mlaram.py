@@ -48,7 +48,12 @@ def _normalize_input_space(X):
     x_max = X.max()
     x_min = X.min()
     if x_max < 0 or x_max > 1 or x_min < 0 or x_min > 1:
-        return numpy.multiply(X - x_min, 1 / (x_max - x_min))
+        if issparse(X):
+            X_normalized = X.copy()
+            X_normalized.data = (X_normalized.data - x_min) / (x_max - x_min)
+            return X_normalized
+        else:
+            return numpy.multiply(X - x_min, 1 / (x_max - x_min))
     return X
 
 
@@ -221,7 +226,12 @@ class MLARAM(MLClassifierBase):
 
             # 1 if winner neuron won a given label 0 if not
             labels_won_indicator = numpy.zeros(y_0.shape, dtype=y_0.dtype)
-            labels_won_indicator[label_assignment_vector.nonzero()] = 1
+            if numpy.ndim(label_assignment_vector) == 0:
+                label_assignment_vector = numpy.array([label_assignment_vector])
+            if label_assignment_vector.ndim > 0 and labels_won_indicator.ndim > 0:
+                non_zero_indices = label_assignment_vector.nonzero()
+                if non_zero_indices[0].size > 0:
+                    labels_won_indicator[non_zero_indices] = 1
             self.neurons[winner].label += labels_won_indicator
 
         return self
@@ -304,13 +314,22 @@ class MLARAM(MLClassifierBase):
         for row_number, input_vector in enumerate(X):
             fc = _concatenate_with_negation(input_vector)
 
-            if issparse(fc):
-                activity = (fc.minimum(all_neurons).sum(1) / all_neurons_sum).squeeze().tolist()
+            if issparse(fc) or issparse(all_neurons):
+                if not issparse(fc):
+                    fc = scipy.sparse.csr_matrix(fc)
+                if not issparse(all_neurons):
+                    all_neurons = scipy.sparse.csr_matrix(all_neurons)
+                activity = (fc.minimum(all_neurons).sum(1).A / all_neurons_sum).squeeze()
             else:
-                activity = (umath.minimum(fc, all_neurons).sum(1) / all_neurons_sum).squeeze().tolist()
+                # Handle dense arrays differently
+                min_vals = numpy.minimum(fc, all_neurons)
+                activity = (numpy.sum(min_vals, axis=1) / all_neurons_sum).squeeze()
+
+            # Convert activity to numpy array if it isn't already
+            activity = numpy.asarray(activity)
 
             if is_matrix:
-                activity = activity[0]
+                activity = activity.flatten()
 
             # be very fast
             sorted_activity = numpy.argsort(activity)[::-1]

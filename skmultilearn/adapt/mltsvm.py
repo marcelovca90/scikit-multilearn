@@ -111,7 +111,7 @@ class MLTSVM(MLClassifierBase):
             H_k = _get_x_class_instances(X_bias, Y, label)
             G_k = _get_x_noclass_instances(X_bias, Y, label)
             Q_knoPrefixGk = _inv((H_k.T).dot(H_k) + self.lambda_param * identity_matrix).dot(G_k.T)
-            Q_k = G_k.dot(Q_knoPrefixGk).A
+            Q_k = G_k.dot(Q_knoPrefixGk).A if any(sp.issparse(mat) for mat in (G_k, Q_knoPrefixGk)) else G_k.dot(Q_knoPrefixGk)
             Q_k = (Q_k + Q_k.T) / 2.0
 
             # Calculate other
@@ -122,11 +122,11 @@ class MLTSVM(MLClassifierBase):
                 self.wk_bk[label] = (-np.dot(Q_knoPrefixGk, alpha_k)).T
 
         self.wk_norms = norm(self.wk_bk, axis=1)
-        self.treshold = 1.0 / np.max(self.wk_norms)
+        self.treshold = 1.0 / np.max(self.wk_norms) if np.max(self.wk_norms) > 0 else np.inf
 
     def predict(self, X):
         X_with_bias = _hstack(X, np.ones((X.shape[0], 1), dtype=X.dtype))
-        wk_norms_multiplicated = self.wk_norms[np.newaxis, :]  # change to form [[wk1, wk2, ..., wkk]]
+        wk_norms_multiplicated = np.where(self.wk_norms == 0, 1e-10, self.wk_norms)[np.newaxis, :]
         all_distances = (-X_with_bias.dot(self.wk_bk.T)) / wk_norms_multiplicated
         predicted_y = np.where(all_distances < self.treshold, 1, 0)
         # TODO: It's possible to add condition to: add label if no labels is in row.
@@ -166,9 +166,9 @@ class MLTSVM(MLClassifierBase):
 
 def _get_x_noclass_instances(X, Y, label_class):
     if sp.issparse(Y):
-        indices = np.where(Y[:, 1].A == 0)[0]
+        indices = np.where(Y[:, label_class].A == 0)[0]
     else:
-        indices = np.where(Y[:, 1] == 0)[0]
+        indices = np.where(Y[:, label_class] == 0)[0]
     return X[indices, :]
 
 

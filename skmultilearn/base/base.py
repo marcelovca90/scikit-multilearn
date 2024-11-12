@@ -154,7 +154,7 @@ class MLClassifierBase(BaseEstimator, ClassifierMixin):
                 # ensuring 2d
                 if len(matrix.shape) == 1:
                     matrix = matrix.reshape((matrix.shape[0], 1))
-                return matrix_creation_function_for_format(sparse_format)(matrix)
+                return matrix_creation_function_for_format(sparse_format or 'csr')(matrix)
 
     def fit(self, X, y):
         """Abstract method to fit classifier with training data

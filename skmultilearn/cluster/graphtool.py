@@ -238,7 +238,11 @@ class GraphToolLabelGraphClusterer(LabelGraphClustererBase):
         """
         self._build_graph_instance(y)
         clusters = self.model.fit_predict(self.graph_, weights=self.weights_)
-        return np.array([community for community in clusters if len(community) > 0])
+        filtered_clusters = [community for community in clusters if len(community) > 0]
+        result = np.empty(len(filtered_clusters), dtype=object)
+        for i, community in enumerate(filtered_clusters):
+            result[i] = np.array(community)
+        return result
 
     def _build_graph_instance(self, y):
         edge_map = self.graph_builder.transform(y)

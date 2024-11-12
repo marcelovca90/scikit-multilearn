@@ -126,4 +126,4 @@ class RandomLabelSpaceClusterer(LabelSpaceClustererBase):
                 for label in range(y.shape[1])
             )
 
-        return np.array(label_sets)
+        return np.array([np.array(label_set) for label_set in label_sets], dtype=object)
