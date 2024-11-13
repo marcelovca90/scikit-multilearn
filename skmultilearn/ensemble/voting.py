@@ -2,6 +2,7 @@ import numpy as np
 from builtins import range
 from builtins import zip
 from scipy import sparse
+from scipy.sparse import issparse, lil_matrix
 
 from .partition import LabelSpacePartitioningClassifier
 
@@ -68,40 +69,47 @@ class MajorityVotingClassifier(LabelSpacePartitioningClassifier):
         )
 
     def predict(self, X):
-        """Predict label assignments for X
-
-        Parameters
-        ----------
-        X : numpy.ndarray or scipy.sparse.csc_matrix
-            input features of shape :code:`(n_samples, n_features)`
-
-        Returns
-        -------
-        scipy.sparse of float
-            binary indicator matrix with label assignments with shape
-            :code:`(n_samples, n_labels)`
-        """
-        predictions = [
-            self._ensure_input_format(self._ensure_input_format(
-                c.predict(X)), sparse_format='csc', enforce_sparse=True)
-            for c in self.classifiers_
-        ]
-
+        """Predict labels for X"""
         voters = np.zeros(self._label_count, dtype='int')
-        votes = sparse.lil_matrix(
-            (predictions[0].shape[0], self._label_count), dtype='int')
+        predictions = []
+        n_samples = X.shape[0]
+
+        # Collect predictions
+        for classifier in self.classifiers_:
+            pred = classifier.predict(X)
+            if issparse(pred):
+                pred = pred.toarray()
+            # Special handling for MLARAM predictions
+            if len(pred.shape) == 1:
+                pred = pred.reshape(-1, 1)
+            elif pred.shape[1] != len(self.partition_[0]):
+                pred = pred.reshape(n_samples, -1)
+            predictions.append(pred)
+
+        # Initialize votes matrix
+        votes = lil_matrix((n_samples, self._label_count), dtype='int')
+
+        # Accumulate votes
         for model in range(self.model_count_):
-            prediction = predictions[model].toarray()
+            prediction = predictions[model]
             for label_idx, partition_label in enumerate(self.partition_[model]):
-                votes[:, partition_label] = votes[:, partition_label].toarray().ravel() + prediction[:, label_idx]
+                if label_idx >= prediction.shape[1]:
+                    continue
+
+                # Get the column of votes for this partition
+                current_votes = votes[:, partition_label].toarray().flatten()
+                new_votes = prediction[:, label_idx].flatten()
+
+                # Update votes using direct assignment
+                for i in range(n_samples):
+                    votes[i, partition_label] = current_votes[i] + new_votes[i]
+
                 voters[partition_label] += 1
 
+        # Normalize votes
         nonzeros = votes.nonzero()
         for row, column in zip(nonzeros[0], nonzeros[1]):
             votes[row, column] = np.round(
                 votes[row, column] / float(voters[column]))
 
         return self._ensure_output_format(votes, enforce_sparse=False)
-
-    def predict_proba(self, X):
-        raise NotImplemented("The voting scheme does not define a method for calculating probabilities")

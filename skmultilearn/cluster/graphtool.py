@@ -217,31 +217,37 @@ class GraphToolLabelGraphClusterer(LabelGraphClustererBase):
         self.graph_builder = graph_builder
 
     def fit_predict(self, X, y):
-        """Performs clustering on y and returns list of label lists
-
-        Builds a label graph using the provided graph builder's `transform` method
-        on `y` and then detects communities using the selected `method`.
-
-        Sets :code:`self.weights_` and :code:`self.graph_`.
+        """Fits model to a given graph and returns list of label lists
 
         Parameters
         ----------
-        X : None
+        X : object
             currently unused, left for scikit compatibility
         y : scipy.sparse
             label space of shape :code:`(n_samples, n_labels)`
 
         Returns
         -------
-        arrray of arrays of label indexes (numpy.ndarray)
-            label space division, each sublist represents labels that are in that community
+        numpy.ndarray
+            array of arrays of label indices
         """
         self._build_graph_instance(y)
         clusters = self.model.fit_predict(self.graph_, weights=self.weights_)
-        filtered_clusters = [community for community in clusters if len(community) > 0]
+
+        # Ensure clusters contain valid label indices
+        filtered_clusters = []
+        for community in clusters:
+            if len(community) > 0:
+                # Ensure indices are within valid range
+                valid_indices = [idx for idx in community if 0 <= idx < y.shape[1]]
+                if valid_indices:
+                    filtered_clusters.append(valid_indices)
+
+        # Convert to object array with proper numpy arrays inside
         result = np.empty(len(filtered_clusters), dtype=object)
         for i, community in enumerate(filtered_clusters):
-            result[i] = np.array(community)
+            result[i] = np.array(sorted(community))  # Sort indices for consistency
+
         return result
 
     def _build_graph_instance(self, y):
