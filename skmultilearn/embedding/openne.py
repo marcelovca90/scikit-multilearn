@@ -8,8 +8,13 @@ from openne.line import LINE
 from openne.lle import LLE
 import networkx as nx
 import numpy as np
-import tensorflow as tf
 import scipy.sparse as sp
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+tf.reset_default_graph()
+import os
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class OpenNetworkEmbedder:
     """Embed the label space using a label network embedder from OpenNE
@@ -157,19 +162,29 @@ class OpenNetworkEmbedder:
 
     def _embedd_y(self, y):
         empty_vector = np.zeros(shape=self.dimension)
+        embedded = []
+
         if sp.issparse(y):
-            return np.array([
-                self.aggregation_function([self.embeddings_.vectors[node] for node in row])
-                if len(row) > 0 else empty_vector
-                for row in _iterate_over_sparse_matrix(y)
-            ]).astype('float64')
+            for row in _iterate_over_sparse_matrix(y):
+                if len(row) > 0:
+                    vectors = [self.embeddings_.vectors[node] for node in row]
+                    # Ensure vectors are stacked properly before aggregation
+                    stacked_vectors = np.vstack(vectors)
+                    embedded.append(self.aggregation_function(stacked_vectors))
+                else:
+                    embedded.append(empty_vector)
 
+        else:
+            for row in (y.A if isinstance(y, np.matrix) else y):
+                if np.any(row > 0):
+                    vectors = [self.embeddings_.vectors[node] for node, v in enumerate(row) if v > 0]
+                    # Ensure vectors are stacked properly before aggregation
+                    stacked_vectors = np.vstack(vectors)
+                    embedded.append(self.aggregation_function(stacked_vectors))
+                else:
+                    embedded.append(empty_vector)
 
-        return np.array([
-            self.aggregation_function([self.embeddings_.vectors[node] for node, v in enumerate(row) if v > 0])
-            if len(row) > 0 else empty_vector
-            for row in (y.A if isinstance(y, np.matrix) else y)
-        ]).astype('float64')
+        return np.vstack(embedded).astype('float64')
 
 
 def _iterate_over_sparse_matrix(y):
